@@ -1,4 +1,4 @@
-export to parquet(directory = 'hdfs://192.168.59.85:9000/apps/spark/mobilitydwh/fact_tb')
+export to parquet(directory = 'hdfs://192.168.59.85:9000/apps/spark/mobilitydwh/fact_tb_staging')
 over(partition by CELL_ID)
 as
     select * from

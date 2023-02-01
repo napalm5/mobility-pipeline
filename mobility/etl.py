@@ -1,6 +1,11 @@
 from os.path import join as pjoin
+import logging
+
+from airflow.contrib.hooks.vertica_hook import VerticaHook
+
 
 def vertica_etl(queries_dir='./queries',**kwargs):
+    print('ciao')
     cur = VerticaHook('VerticaProd').get_cursor()
     
     with open(pjoin(queries_dir,'set_vertica_parameters.sql'), 'r') as file:

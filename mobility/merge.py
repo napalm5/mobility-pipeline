@@ -2,9 +2,8 @@ from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 
 from os.path import join as pjoin
-import logging
 
-def display_mobility_data(
+def merge_new_data(
         hdfs_host,
         hdfs_port = '9000',
         data_dir = 'apps/spark',
@@ -16,7 +15,7 @@ def display_mobility_data(
     
     MEM_DRIVER_GB = driver_mem_gb
     MEM_EXEC_GB = exec_mem_gb
-    
+
     spark = SparkSession.builder\
         .appName("UP_ML_scoring")\
         .config("spark.executor.memory", f"{exec_mem_gb}g")\
@@ -25,8 +24,12 @@ def display_mobility_data(
         .config("spark.driver.maxResultSize", f"{driver_mem_gb}g")\
         .config("spark.local.dir", "/var/opt/anritsu/.pysparkTmp")\
         .getOrCreate()
+
+    historical_data = spark.read.parquet(pjoin(f"hdfs://{hdfs_host}:{hdfs_port}", data_dir, dwh,'fact_tb','*'))
+    new_data = spark.read.parquet(pjoin(f"hdfs://{hdfs_host}:{hdfs_port}", data_dir, dwh,'fact_tb_staging','*'))
+
+    merged_data = historical_data\
+        .union(new_data)\
+        .drop_duplicates()
     
-    result_tb = spark.read.parquet(pjoin(f"hdfs://{hdfs_host}:{hdfs_port}", data_dir, dwh,'fact_tb','*')).limit(10)
-    result_df = result_tb.toPandas()
-    logging.info(result_df)
-    logging.info('Loading successful')
+    merged_data.write.mode('overwrite').parquet(pjoin(f"hdfs://{hdfs_host}:{hdfs_port}", data_dir, dwh,'fact_tb_updated')) 

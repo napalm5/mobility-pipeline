@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from textwrap import dedent
 
 from airflow import DAG
+from airflow.contrib.hooks.vertica_hook import VerticaHook
 from airflow.decorators import dag, task
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
@@ -40,26 +41,39 @@ with DAG(
     clean = BashOperator(
         task_id="clean_data",
         bash_command=\
-            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r /apps/spark/mobilitydwh/fact_tb",
+            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb_staging",
     )
     
     etl = PythonOperator(
         task_id='etl', 
-        trigger_rule="all_done",
         python_callable=f.vertica_etl,
-        op_kwargs={'queries_dir': '/home/mclaw/.airflow/dags/mobility/queries'},
+        op_kwargs={'queries_dir': '/home/mclaw/.airflow/dags/mobility_paper_pipeline/mobility/queries'},
     )
         
     set_permissions = BashOperator(
         task_id="set_permissions",
         bash_command=\
-            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -chmod -R 777 /apps/spark/mobilitydwh/fact_tb",
+            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -chmod -R 777 /apps/spark/mobilitydwh/fact_tb_staging",
+    )
+        
+    merge = PythonOperator(
+        task_id='merge', 
+        python_callable=f.merge_new_data,
+        op_kwargs={'mem_exec_gb': 10, 'hdfs_host' : env['local_hadoop']['host']},
+    )
+    
+    update_data = BashOperator(
+        task_id="update_data",
+        bash_command=\
+            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb && sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -mv /apps/spark/mobilitydwh/fact_tb_updated /apps/spark/mobilitydwh/fact_tb",
     )
     
     show = PythonOperator(
         task_id='show', 
-        python_callable=f.vertica_etl,
+        python_callable=f.display_mobility_data,
         op_kwargs={'mem_exec_gb': 10, 'hdfs_host' : env['local_hadoop']['host']},
     )
+
     
-    clean >> etl >> set_permissions >> show
+    clean >> etl >> set_permissions >> merge >> update_data >> show
+    

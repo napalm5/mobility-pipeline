@@ -10,7 +10,7 @@ def vertica_etl(queries_dir='./queries',**kwargs):
     
     with open(pjoin(queries_dir,'set_vertica_parameters.sql'), 'r') as file:
         query_setup = file.read()
-    with open(pjoin(queries_dir,'get_mobility_data.sql'), 'r') as file:
+    with open(pjoin(queries_dir,'get_mobility_data_aggregated.sql'), 'r') as file:
         query = file.read()
 
     cur.execute(query_setup)

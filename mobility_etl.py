@@ -31,7 +31,7 @@ with DAG(
         "retry_delay": timedelta(minutes=5),
     },
     description="ETL pipeline to get clean mobility tracking data",
-    schedule_interval=None,
+    schedule_interval=None, #"0 0 */5 * *", #None
     start_date=datetime.today(),
     catchup=False,
     tags=["example"],
@@ -41,32 +41,34 @@ with DAG(
     clean = BashOperator(
         task_id="clean_data",
         bash_command=\
-            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb_staging",
+            "sudo -u dbadmin /var/opt/anritsu/installations/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb_staging",
     )
     
     etl = PythonOperator(
         task_id='etl', 
         python_callable=f.vertica_etl,
         op_kwargs={'queries_dir': '/home/mclaw/.airflow/dags/mobility_paper_pipeline/mobility/queries'},
-    )
+    ) #  trigger_rule="all_done",
         
     set_permissions = BashOperator(
         task_id="set_permissions",
         bash_command=\
-            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -chmod -R 777 /apps/spark/mobilitydwh/fact_tb_staging",
+            "sudo -u dbadmin /var/opt/anritsu/installations/Hadoop/hadoop-3.3.4/bin/hadoop fs -chmod -R 777 /apps/spark/mobilitydwh/fact_tb_staging",
     )
         
     merge = PythonOperator(
         task_id='merge', 
-        python_callable=f.merge_new_data,
+        python_callable=f.update_deltalake,
         op_kwargs={'mem_exec_gb': 10, 'hdfs_host' : env['local_hadoop']['host']},
     )
     
+    '''
     update_data = BashOperator(
         task_id="update_data",
         bash_command=\
-            "sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb && sudo -u dbadmin /opt/anritsu/Hadoop/hadoop-3.3.4/bin/hadoop fs -mv /apps/spark/mobilitydwh/fact_tb_updated /apps/spark/mobilitydwh/fact_tb",
+            "sudo -u dbadmin /var/opt/anritsu/installations/Hadoop/hadoop-3.3.4/bin/hadoop fs -rm -r -f /apps/spark/mobilitydwh/fact_tb && sudo -u dbadmin /var/opt/anritsu/installations/Hadoop/hadoop-3.3.4/bin/hadoop fs -mv /apps/spark/mobilitydwh/fact_tb_updated /apps/spark/mobilitydwh/fact_tb",
     )
+    '''
     
     show = PythonOperator(
         task_id='show', 
@@ -75,5 +77,5 @@ with DAG(
     )
 
     
-    clean >> etl >> set_permissions >> merge >> update_data >> show
+    clean >> etl >> set_permissions >> merge >> show
     
